@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: AATK_VanguardX 
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: LICHESS_TOKEN
+        scope: project
+      - key: PORT
+        value: "8080"
+    region: oregon
