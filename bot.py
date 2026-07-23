@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # --- CONFIGURATION ---
 TOKEN = os.environ.get("LICHESS_TOKEN", "YOUR_SECRET_TOKEN_HERE")
-BOT_USERNAME = "Studyloversz-bot"
+BOT_USERNAME = "AATK_VanguardX"
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",
