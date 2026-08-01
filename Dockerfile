@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install standard stockfish and system compilation tools
+# Install Stockfish and system tools
 RUN apt-get update && apt-get install -y \
     stockfish \
     wget \
@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone, compile, and install Fairy-Stockfish from source securely
+# Clone, compile, and install Fairy-Stockfish
 ENV REPO_OWNER="fairy-stockfish"
 ENV REPO_NAME="Fairy-Stockfish"
 RUN git clone https://github.com/${REPO_OWNER}/${REPO_NAME}.git /tmp/fairy-stockfish \
@@ -20,16 +20,20 @@ RUN git clone https://github.com/${REPO_OWNER}/${REPO_NAME}.git /tmp/fairy-stock
     && cp stockfish /usr/local/bin/fairy-stockfish \
     && rm -rf /tmp/fairy-stockfish
 
+# Copy requirements
 COPY requirements.txt .
 
-# Upgrade building utilities first to solve the pip install exit code 1 error
+# Upgrade pip tools first
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Installs python-chess and requests cleanly
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy bot code
 COPY bot.py .
 
+# Expose health check port
 EXPOSE 8080
 
+# Run bot
 CMD ["python", "bot.py"]
