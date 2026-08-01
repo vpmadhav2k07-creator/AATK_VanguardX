@@ -221,14 +221,14 @@ def listen_to_events():
             response = requests.get(url, headers=HEADERS, stream=True, timeout=None)
             print("[SERVER] Connected to Lichess event stream.")
 
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                try:
-                    event = json.loads(line.decode('utf-8'))
-                except Exception as parse_err:
-                    print(f"[STREAM ERROR] Failed to parse: {parse_err}")
-                    continue
+        for line in response.iter_lines():
+    if not line:
+        continue
+    try:
+        event = json.loads(line.decode('utf-8'))
+    except json.JSONDecodeError:
+        # Ignore empty or malformed lines
+        continue
 
                 event_type = event.get('type')
                 print(f"[STREAM EVENT] Received: {event_type}")
