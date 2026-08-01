@@ -263,3 +263,5 @@ def listen_to_events():
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
             time.sleep(10)
+if __name__ == "__main__":
+    listen_to_events()
