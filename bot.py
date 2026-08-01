@@ -160,90 +160,56 @@ def stockfish_worker():
             callback(None)
         finally:
             engine_queue.task_done()
-
-# --- GAME THREAD ---
-def play_game(game_id, variant_key='standard'):
-    with active_games_lock:
-        if game_id in active_games:
-            return
-        active_games.add(game_id)
-
-    print(f"[GAME START] {game_id} | Variant: {variant_key}")
-    response = safe_lichess_stream(f"https://lichess.org/api/bot/game/stream/{game_id}", game_id)
-
-    bot_color = None
-    opponent = None
-    sent_welcome = False
-
-    def _parse_player_info(player_obj):
-        if not isinstance(player_obj, dict):
-            return {"id": "", "name": "", "rating": None, "title": ""}
-        player_id = player_obj.get('id') or (player_obj.get('user') or {}).get('id') or ""
-        return {
-            "id": player_id,
-            "name": player_obj.get('name', ""),
-            "rating": player_obj.get('rating'),
-            "title": player_obj.get('title', "")
-        }
-
+#Faah
+def play_game(game_id, variant_key):
     try:
+        print(f"[GAME START] {game_id} | Variant: {variant_key}")
+        moves_played = []
+        bot_color = None
+
+        # Fetch initial game state
+        game_url = f"https://lichess.org/api/bot/game/stream/{game_id}"
+        response = requests.get(game_url, headers=HEADERS, stream=True, timeout=None)
+
         for line in response.iter_lines():
             if not line:
                 continue
             try:
-                game_event = json.loads(line.decode('utf-8'))
-            except Exception:
+                event = json.loads(line.decode('utf-8'))
+            except Exception as parse_err:
+                print(f"[STREAM ERROR] Failed to parse: {parse_err}")
                 continue
 
-            event_type = game_event.get('type')
-            state = None
+            event_type = event.get('type')
 
             if event_type == 'gameFull':
-                white_player = _parse_player_info(game_event.get('white', {}))
-                black_player = _parse_player_info(game_event.get('black', {}))
-                if white_player["id"].lower() == BOT_USERNAME.lower():
-                    bot_color, opponent = 'white', black_player
-                elif black_player["id"].lower() == BOT_USERNAME.lower():
-                    bot_color, opponent = 'black', white_player
-                state = game_event['state']
+                state = event.get('state', {})
+                moves_played = state.get('moves', '').split()
+                bot_color = 'white' if event['white']['id'] == BOT_USERNAME else 'black'
+                print(f"[GAME INFO] Bot plays as {bot_color}")
 
             elif event_type == 'gameState':
-                state = game_event
+                moves_played = event.get('moves', '').split()
+                is_bot_turn = (
+                    (len(moves_played) % 2 == 0 and bot_color == 'white') or
+                    (len(moves_played) % 2 == 1 and bot_color == 'black')
+                )
 
-            if not state:
-                continue
+                if is_bot_turn:
+                    def handle_move_result(move_uci):
+                        if move_uci:
+                            make_lichess_move(game_id, move_uci)
 
-            if state.get('status') != 'started':
-                send_chat_message(game_id, "player", "Good game! Thanks for playing.")
-                break
+                    engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
-            if event_type == 'gameFull' and not sent_welcome:
-                send_chat_message(game_id, "player", f"Hello! Engine Mode active ({variant_key}). Good luck!")
-                sent_welcome = True
-
-            moves_played = state['moves'].strip().split() if state['moves'].strip() else []
-            total_moves = len(moves_played)
-
-            if bot_color is None:
-                continue
-
-            is_bot_turn = (total_moves % 2 == 0 and bot_color == 'white') or \
-                          (total_moves % 2 != 0 and bot_color == 'black')
-
-            if is_bot_turn:
-                def handle_move_result(move_uci):
-                    if move_uci:
-                        make_lichess_move(game_id, move_uci)
-                engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
+    except Exception as conn_err:
+        print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
+        time.sleep(10)
 
     finally:
         with active_games_lock:
             active_games.discard(game_id)
         print(f"[GAME END] {game_id}")
-
-        except Exception as conn_err:
-            print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
-            time.sleep(10)
 
 # --- GLOBAL LISTENER ---
 # --- GLOBAL LISTENER ---
