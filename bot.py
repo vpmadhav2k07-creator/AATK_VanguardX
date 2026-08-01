@@ -347,7 +347,6 @@ def play_game(game_id, variant_key='standard'):
         print(f"[GAME END] Cleaned up thread context for game: {game_id}")
 
 
-# --- GLOBAL EVENT LISTENER ---
 def listen_to_events():
     """Listens to global challenges and game starts with heavy diagnostic tracking."""
     print(f"Starting global event listener for user: {BOT_USERNAME}")
@@ -380,39 +379,25 @@ def listen_to_events():
                     print(f"[CHALLENGE] Incoming request ID: {challenge_id} | Variant: {variant_key}")
                     
                     if variant_key in SUPPORTED_VARIANTS:
-                        # Auto-accept challenge if supported
-                        accept_url = f"https://lichess.org{challenge_id}/accept"
+                        # ✅ Corrected URL for accepting challenge
+                        accept_url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
                         safe_lichess_post(accept_url)
                         print(f"[CHALLENGE] Accepted variant challenge: {challenge_id}")
                     else:
-                        # Decline challenge if unsupported
-                        decline_url = f"https://lichess.org{challenge_id}/decline"
+                        # ✅ Corrected URL for declining challenge
+                        decline_url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
                         safe_lichess_post(decline_url, json_data={"reason": "variant"})
                         print(f"[CHALLENGE] Declined unsupported variant challenge: {challenge_id}")
 
                 elif event_type == 'gameStart':
                     game_info = event['game']
                     game_id = game_info['id']
-                    # Use fallback variant mapping logic safely
                     variant_key = game_info.get('variant', {}).get('key', 'standard')
                     
-                    # Spin up an independent asynchronous tracking loop thread per game layout
+                    # Spin up an independent asynchronous tracking loop thread per game
                     game_thread = threading.Thread(target=play_game, args=(game_id, variant_key), daemon=True)
                     game_thread.start()
 
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] Pipeline context drop exception: {conn_err}. Reconnecting in 10s...")
             time.sleep(10)
-
-# --- APPLICATION ENTRY POINT ---
-if __name__ == "__main__":
-    # Start the local environment health validation server for background deployment hosts
-    server_thread = threading.Thread(target=run_fake_server, daemon=True)
-    server_thread.start()
-    
-    # Run the background Stockfish analytical processing worker
-    worker_thread = threading.Thread(target=stockfish_worker, daemon=True)
-    worker_thread.start()
-    
-    # Start our infinite stream parsing routine on main system loop thread
-    listen_to_events()
