@@ -249,7 +249,7 @@ def listen_to_events():
                 try:
                     event = json.loads(decoded_line)
                 except json.JSONDecodeError:
-                    # Ignore empty or malformed lines silently
+                    # Ignore malformed or heartbeat lines silently
                     continue
 
                 event_type = event.get('type')
@@ -265,6 +265,8 @@ def listen_to_events():
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
             time.sleep(10)
+            continue
+
 # --- ENTRY POINT ---
 if __name__ == "__main__":
     try:
