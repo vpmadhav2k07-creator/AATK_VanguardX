@@ -246,6 +246,7 @@ def play_game(game_id, variant_key='standard'):
             time.sleep(10)
 
 # --- GLOBAL LISTENER ---
+# --- GLOBAL LISTENER ---
 def listen_to_events():
     print(f"Starting global event listener for {BOT_USERNAME}")
     url = "https://lichess.org/api/stream/event"
@@ -296,20 +297,3 @@ def listen_to_events():
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
             time.sleep(10)
-
-# --- ENTRY POINT ---
-if __name__ == "__main__":
-    try:
-        server_thread = threading.Thread(target=run_fake_server, daemon=True)
-        server_thread.start()
-
-        worker_thread = threading.Thread(target=stockfish_worker, daemon=True)
-        worker_thread.start()
-
-        listen_to_events()   # this blocks forever
-    except Exception as e:
-        print(f"[FATAL] Bot crashed: {e}")
-        # Keep container alive for debugging
-        while True:
-            time.sleep(60)
-
