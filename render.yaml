@@ -1,11 +1,12 @@
 services:
   - type: web
-    name: AATK_VanguardX 
+    name: AATK_VanguardX
     dockerfilePath: ./Dockerfile
     autoDeploy: true
     envVars:
       - key: LICHESS_TOKEN
-        scope: project
+        sync: false   # ensures secret stays hidden and not committed
       - key: PORT
         value: "8080"
     region: oregon
+    plan: free        # or starter/standard depending on your Render plan
