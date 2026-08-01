@@ -214,51 +214,35 @@ def play_game(game_id, variant_key):
 # --- GLOBAL LISTENER ---
 # --- GLOBAL LISTENER ---
 def listen_to_events():
-    print(f"Starting global event listener for {BOT_USERNAME}")
+    print("[SERVER] Connecting to Lichess event stream...")
     url = "https://lichess.org/api/stream/event"
+
     while True:
         try:
             response = requests.get(url, headers=HEADERS, stream=True, timeout=None)
             print("[SERVER] Connected to Lichess event stream.")
 
-        for line in response.iter_lines():
-    if not line:
-        continue
-    try:
-        event = json.loads(line.decode('utf-8'))
-    except json.JSONDecodeError:
-        # Ignore empty or malformed lines
-        continue
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                decoded_line = line.decode('utf-8').strip()
+                if not decoded_line:
+                    continue
+                try:
+                    event = json.loads(decoded_line)
+                except json.JSONDecodeError:
+                    # Ignore empty or malformed lines silently
+                    continue
 
                 event_type = event.get('type')
                 print(f"[STREAM EVENT] Received: {event_type}")
 
                 if event_type == 'challenge':
-                    challenge_data = event['challenge']
-                    challenge_id = challenge_data['id']
-                    variant_info = challenge_data.get('variant', {})
-                    variant_key = variant_info.get('key', 'standard')
-
-                    print(f"[CHALLENGE] ID: {challenge_id} | Variant: {variant_key}")
-
-                    if variant_key in SUPPORTED_VARIANTS:
-                        accept_url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
-                        safe_lichess_post(accept_url)
-                        print(f"[CHALLENGE] Accepted: {challenge_id}")
-                    else:
-                        decline_url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
-                        safe_lichess_post(decline_url, json_data={"reason": "variant"})
-                        print(f"[CHALLENGE] Declined unsupported: {challenge_id}")
-
+                    handle_challenge(event)
                 elif event_type == 'gameStart':
-                    game_info = event['game']
-                    game_id = game_info['id']
-                    variant_key = game_info.get('variant', {}).get('key', 'standard')
-
-                    game_thread = threading.Thread(
-                        target=play_game, args=(game_id, variant_key), daemon=True
-                    )
-                    game_thread.start()
+                    game_id = event['game']['id']
+                    variant_key = event['game']['variant']['key']
+                    threading.Thread(target=play_game, args=(game_id, variant_key)).start()
 
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
