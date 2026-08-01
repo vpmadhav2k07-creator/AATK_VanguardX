@@ -247,5 +247,21 @@ def listen_to_events():
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
             time.sleep(10)
+# --- ENTRY POINT ---
 if __name__ == "__main__":
-    listen_to_events()
+    try:
+        # Start the fake server for Render health checks
+        server_thread = threading.Thread(target=run_fake_server, daemon=True)
+        server_thread.start()
+
+        # Start the Stockfish worker thread
+        worker_thread = threading.Thread(target=stockfish_worker, daemon=True)
+        worker_thread.start()
+
+        # Start listening to Lichess events
+        listen_to_events()
+    except Exception as e:
+        print(f"[FATAL] Bot crashed: {e}")
+        while True:
+            time.sleep(60)
+
