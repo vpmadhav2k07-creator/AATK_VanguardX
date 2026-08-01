@@ -211,6 +211,24 @@ def play_game(game_id, variant_key):
             active_games.discard(game_id)
         print(f"[GAME END] {game_id}")
 
+def handle_challenge(event):
+    challenge = event.get('challenge', {})
+    challenge_id = challenge.get('id')
+    challenger = challenge.get('challenger', {}).get('name')
+    variant = challenge.get('variant', {}).get('key')
+    speed = challenge.get('timeControl', {}).get('type')
+    rated = challenge.get('rated', False)
+
+    print(f"[CHALLENGE] Received from {challenger} ({variant}, {speed}, {'rated' if rated else 'casual'})")
+
+    # Accept all rated and casual challenges
+    url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
+    response = safe_lichess_post(url)
+    if response and response.status_code == 200:
+        print(f"[CHALLENGE] Accepted challenge from {challenger}")
+    else:
+        print(f"[CHALLENGE ERROR] Failed to accept challenge: {response.status_code if response else 'No response'}")
+
 # --- GLOBAL LISTENER ---
 # --- GLOBAL LISTENER ---
 def listen_to_events():
