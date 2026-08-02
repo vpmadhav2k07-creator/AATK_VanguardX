@@ -196,6 +196,7 @@ if event_type == 'gameFull':
         engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
 
+
             elif event_type == 'gameState':
                 moves_played = event.get('moves', '').split()
                 is_bot_turn = (
