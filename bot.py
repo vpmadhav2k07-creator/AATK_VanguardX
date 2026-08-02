@@ -167,7 +167,6 @@ def play_game(game_id, variant_key):
         moves_played = []
         bot_color = None
 
-        # Fetch initial game state
         game_url = f"https://lichess.org/api/bot/game/stream/{game_id}"
         response = requests.get(game_url, headers=HEADERS, stream=True, timeout=None)
 
@@ -182,19 +181,20 @@ def play_game(game_id, variant_key):
 
             event_type = event.get('type')
 
-            if event_type == 'gameFull':
-                state = event.get('state', {})
-                moves_played = state.get('moves', '').split()
-                bot_color = 'white' if event['white']['id'] == BOT_USERNAME else 'black'
-                print(f"[GAME INFO] Bot plays as {bot_color}")
+if event_type == 'gameFull':
+    state = event.get('state', {})
+    moves_played = state.get('moves', '').split()
+    bot_color = 'white' if event['white']['id'] == BOT_USERNAME else 'black'
+    print(f"[GAME INFO] Bot plays as {bot_color}")
 
-                # If bot is White and no moves yet, play immediately
-                if bot_color == 'white' and len(moves_played) == 0:
-                    def handle_move_result(move_uci):
-                        if move_uci:
-                            make_lichess_move(game_id, move_uci)
+    # If bot is White and no moves yet, play immediately
+    if bot_color == 'white' and len(moves_played) == 0:
+        print(f"[{game_id}] Bot is White — making opening move...")
+        def handle_move_result(move_uci):
+            if move_uci:
+                make_lichess_move(game_id, move_uci)
+        engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
-                    engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
             elif event_type == 'gameState':
                 moves_played = event.get('moves', '').split()
@@ -204,10 +204,10 @@ def play_game(game_id, variant_key):
                 )
 
                 if is_bot_turn:
+                    print(f"[{game_id}] Bot turn detected ({bot_color}), moves so far: {moves_played}")
                     def handle_move_result(move_uci):
                         if move_uci:
                             make_lichess_move(game_id, move_uci)
-
                     engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
     except Exception as conn_err:
