@@ -86,7 +86,11 @@ def safe_lichess_stream(url, game_id=""):
 def send_chat_message(game_id, room, text):
     url = f"https://lichess.org/api/bot/game/{game_id}/chat"
     data = {"room": room, "text": text}
-    safe_lichess_post(url, json_data=data)
+    response = safe_lichess_post(url, json_data=data)
+    if response and response.status_code == 200:
+        print(f"[{game_id}] Chat message sent: {text}")
+    else:
+        print(f"[{game_id}] Failed to send chat: {response.status_code if response else 'No response'}")
 
 def make_lichess_move(game_id, move_str):
     url = f"https://lichess.org/api/bot/game/{game_id}/move/{move_str}"
@@ -160,7 +164,7 @@ def stockfish_worker():
             callback(None)
         finally:
             engine_queue.task_done()
-#Faah
+
 def play_game(game_id, variant_key):
     try:
         print(f"[GAME START] {game_id} | Variant: {variant_key}")
@@ -183,9 +187,13 @@ def play_game(game_id, variant_key):
 
             if event_type == 'gameFull':
                 state = event.get('state', {})
-                moves_played = state.get('moves', '').split()
+                moves_str = state.get('moves', '')
+                moves_played = moves_str.split() if moves_str else []
                 bot_color = 'white' if event['white']['id'] == BOT_USERNAME else 'black'
                 print(f"[GAME INFO] Bot plays as {bot_color}")
+
+                # Send opening greeting
+                send_chat_message(game_id, 'player', 'Hello! Good luck!')
 
                 if bot_color == 'white' and len(moves_played) == 0:
                     print(f"[{game_id}] Bot is White — making opening move...")
@@ -195,14 +203,15 @@ def play_game(game_id, variant_key):
                     engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
             elif event_type == 'gameState':
-                moves_played = event.get('moves', '').split()
+                moves_str = event.get('moves', '')
+                moves_played = moves_str.split() if moves_str else []
                 is_bot_turn = (
                     (len(moves_played) % 2 == 0 and bot_color == 'white') or
                     (len(moves_played) % 2 == 1 and bot_color == 'black')
                 )
 
                 if is_bot_turn:
-                    print(f"[{game_id}] Bot turn detected ({bot_color}), moves so far: {moves_played}")
+                    print(f"[{game_id}] Bot turn detected ({bot_color}), moves so far: {len(moves_played)}")
                     def handle_move_result(move_uci):
                         if move_uci:
                             make_lichess_move(game_id, move_uci)
@@ -220,22 +229,30 @@ def play_game(game_id, variant_key):
 def handle_challenge(event):
     challenge = event.get('challenge', {})
     challenge_id = challenge.get('id')
-    challenger = challenge.get('challenger', {}).get('name')
+    challenger = challenge.get('challenger', {})
+    challenger_name = challenger.get('name')
+    challenger_is_bot = challenger.get('bot', False)
     variant = challenge.get('variant', {}).get('key')
     speed = challenge.get('timeControl', {}).get('type')
     rated = challenge.get('rated', False)
 
-    print(f"[CHALLENGE] Received from {challenger} ({variant}, {speed}, {'rated' if rated else 'casual'})")
+    print(f"[CHALLENGE] Received from {challenger_name} ({variant}, {speed}, {'rated' if rated else 'casual'})")
 
-    # Accept all rated and casual challenges
+    # Decline challenges from bots
+    if challenger_is_bot:
+        print(f"[CHALLENGE] Declining challenge from bot: {challenger_name}")
+        url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
+        safe_lichess_post(url)
+        return
+
+    # Accept all rated and casual challenges from humans
     url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
     response = safe_lichess_post(url)
     if response and response.status_code == 200:
-        print(f"[CHALLENGE] Accepted challenge from {challenger}")
+        print(f"[CHALLENGE] Accepted challenge from {challenger_name}")
     else:
         print(f"[CHALLENGE ERROR] Failed to accept challenge: {response.status_code if response else 'No response'}")
 
-# --- GLOBAL LISTENER ---
 # --- GLOBAL LISTENER ---
 def listen_to_events():
     print("[SERVER] Connecting to Lichess event stream...")
@@ -290,4 +307,3 @@ if __name__ == "__main__":
         print(f"[FATAL] Bot crashed: {e}")
         while True:
             time.sleep(60)
-
