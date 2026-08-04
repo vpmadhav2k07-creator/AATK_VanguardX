@@ -189,7 +189,19 @@ def play_game(game_id, variant_key):
                 state = event.get('state', {})
                 moves_str = state.get('moves', '')
                 moves_played = moves_str.split() if moves_str else []
-                bot_color = 'white' if event['white']['id'] == BOT_USERNAME else 'black'
+                
+                # Determine bot color - check both white and black
+                white_id = event.get('white', {}).get('id')
+                black_id = event.get('black', {}).get('id')
+                
+                if white_id == BOT_USERNAME:
+                    bot_color = 'white'
+                elif black_id == BOT_USERNAME:
+                    bot_color = 'black'
+                else:
+                    print(f"[{game_id}] ERROR: Bot not found in game! White: {white_id}, Black: {black_id}")
+                    continue
+                
                 print(f"[GAME INFO] Bot plays as {bot_color}")
 
                 # Send opening greeting
@@ -232,6 +244,7 @@ def handle_challenge(event):
     challenger = challenge.get('challenger', {})
     challenger_name = challenger.get('name')
     challenger_is_bot = challenger.get('bot', False)
+    challenger_id = challenger.get('id')
     variant = challenge.get('variant', {}).get('key')
     speed = challenge.get('timeControl', {}).get('type')
     rated = challenge.get('rated', False)
@@ -241,6 +254,14 @@ def handle_challenge(event):
     # Decline challenges from bots
     if challenger_is_bot:
         print(f"[CHALLENGE] Declining challenge from bot: {challenger_name}")
+        url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
+        safe_lichess_post(url)
+        return
+
+    # Additional bot check: decline if challenger name contains common bot indicators
+    bot_indicators = ['bot', 'engine', 'stockfish', 'fairy']
+    if any(indicator in challenger_name.lower() for indicator in bot_indicators):
+        print(f"[CHALLENGE] Declining challenge from suspected bot: {challenger_name}")
         url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
         safe_lichess_post(url)
         return
