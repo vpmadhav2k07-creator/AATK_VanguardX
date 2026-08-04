@@ -254,29 +254,23 @@ def handle_challenge(event):
 
         print(f"[CHALLENGE] Received from {challenger_name} ({variant}, {speed}, {'rated' if rated else 'casual'})")
 
-        # Decline challenges from bots
+        # Only decline challenges from confirmed bots (using the 'bot' flag)
         if challenger_is_bot:
             print(f"[CHALLENGE] Declining challenge from bot: {challenger_name}")
             url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
             safe_lichess_post(url)
             return
 
-        # Additional bot check: decline if challenger name contains common bot indicators
-        if challenger_name:
-            bot_indicators = ['bot', 'engine', 'stockfish', 'fairy']
-            if any(indicator in challenger_name.lower() for indicator in bot_indicators):
-                print(f"[CHALLENGE] Declining challenge from suspected bot: {challenger_name}")
-                url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
-                safe_lichess_post(url)
-                return
-
-        # Accept all rated and casual challenges from humans
+        # Accept all challenges from humans
+        print(f"[CHALLENGE] Accepting challenge from {challenger_name}")
         url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
         response = safe_lichess_post(url)
         if response and response.status_code == 200:
-            print(f"[CHALLENGE] Accepted challenge from {challenger_name}")
+            print(f"[CHALLENGE] Successfully accepted challenge from {challenger_name}")
         else:
             print(f"[CHALLENGE ERROR] Failed to accept challenge: {response.status_code if response else 'No response'}")
+            if response:
+                print(f"[CHALLENGE ERROR] Response: {response.text}")
     except Exception as e:
         print(f"[CHALLENGE ERROR] Exception in handle_challenge: {e}")
 
