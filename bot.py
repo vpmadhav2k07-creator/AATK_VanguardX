@@ -239,40 +239,44 @@ def play_game(game_id, variant_key):
         print(f"[GAME END] {game_id}")
 
 def handle_challenge(event):
-    challenge = event.get('challenge', {})
-    challenge_id = challenge.get('id')
-    challenger = challenge.get('challenger', {})
-    challenger_name = challenger.get('name')
-    challenger_is_bot = challenger.get('bot', False)
-    challenger_id = challenger.get('id')
-    variant = challenge.get('variant', {}).get('key')
-    speed = challenge.get('timeControl', {}).get('type')
-    rated = challenge.get('rated', False)
+    try:
+        challenge = event.get('challenge', {})
+        challenge_id = challenge.get('id')
+        challenger = challenge.get('challenger', {})
+        challenger_name = challenger.get('name', 'Unknown')
+        challenger_is_bot = challenger.get('bot', False)
+        challenger_id = challenger.get('id')
+        variant = challenge.get('variant', {}).get('key', 'unknown')
+        speed = challenge.get('timeControl', {}).get('type', 'unknown')
+        rated = challenge.get('rated', False)
 
-    print(f"[CHALLENGE] Received from {challenger_name} ({variant}, {speed}, {'rated' if rated else 'casual'})")
+        print(f"[CHALLENGE] Received from {challenger_name} ({variant}, {speed}, {'rated' if rated else 'casual'})")
 
-    # Decline challenges from bots
-    if challenger_is_bot:
-        print(f"[CHALLENGE] Declining challenge from bot: {challenger_name}")
-        url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
-        safe_lichess_post(url)
-        return
+        # Decline challenges from bots
+        if challenger_is_bot:
+            print(f"[CHALLENGE] Declining challenge from bot: {challenger_name}")
+            url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
+            safe_lichess_post(url)
+            return
 
-    # Additional bot check: decline if challenger name contains common bot indicators
-    bot_indicators = ['bot', 'engine', 'stockfish', 'fairy']
-    if any(indicator in challenger_name.lower() for indicator in bot_indicators):
-        print(f"[CHALLENGE] Declining challenge from suspected bot: {challenger_name}")
-        url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
-        safe_lichess_post(url)
-        return
+        # Additional bot check: decline if challenger name contains common bot indicators
+        if challenger_name:
+            bot_indicators = ['bot', 'engine', 'stockfish', 'fairy']
+            if any(indicator in challenger_name.lower() for indicator in bot_indicators):
+                print(f"[CHALLENGE] Declining challenge from suspected bot: {challenger_name}")
+                url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
+                safe_lichess_post(url)
+                return
 
-    # Accept all rated and casual challenges from humans
-    url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
-    response = safe_lichess_post(url)
-    if response and response.status_code == 200:
-        print(f"[CHALLENGE] Accepted challenge from {challenger_name}")
-    else:
-        print(f"[CHALLENGE ERROR] Failed to accept challenge: {response.status_code if response else 'No response'}")
+        # Accept all rated and casual challenges from humans
+        url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
+        response = safe_lichess_post(url)
+        if response and response.status_code == 200:
+            print(f"[CHALLENGE] Accepted challenge from {challenger_name}")
+        else:
+            print(f"[CHALLENGE ERROR] Failed to accept challenge: {response.status_code if response else 'No response'}")
+    except Exception as e:
+        print(f"[CHALLENGE ERROR] Exception in handle_challenge: {e}")
 
 # --- GLOBAL LISTENER ---
 def listen_to_events():
