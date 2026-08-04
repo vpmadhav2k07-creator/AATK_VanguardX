@@ -170,6 +170,7 @@ def play_game(game_id, variant_key):
         print(f"[GAME START] {game_id} | Variant: {variant_key}")
         moves_played = []
         bot_color = None
+        opening_move_played = False
 
         game_url = f"https://lichess.org/api/bot/game/stream/{game_id}"
         response = requests.get(game_url, headers=HEADERS, stream=True, timeout=None)
@@ -209,6 +210,7 @@ def play_game(game_id, variant_key):
 
                 if bot_color == 'white' and len(moves_played) == 0:
                     print(f"[{game_id}] Bot is White — making opening move...")
+                    opening_move_played = True
                     def handle_move_result(move_uci):
                         if move_uci:
                             make_lichess_move(game_id, move_uci)
