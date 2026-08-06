@@ -18,8 +18,14 @@ BOT_USERNAME_LC = BOT_USERNAME.lower()
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "User-Agent": f"{BOT_USERNAME}/1.0 (+https://lichess.org/@/{BOT_USERNAME_LC})"
 }
+
+# Fail fast if token not provided
+if not TOKEN or TOKEN == "YOUR_SECRET_TOKEN_HERE":
+    print("[FATAL] LICHESS_TOKEN not set. Set LICHESS_TOKEN env var and restart.")
+    raise SystemExit(1)
 
 SUPPORTED_VARIANTS = {
     'standard': chess.Board,
@@ -61,6 +67,8 @@ def safe_lichess_post(url, json_data=None):
         if response.status_code == 429:
             print("[WARNING] 429 Rate Limit. Backing off...")
             time.sleep(5)
+        if not response.ok:
+            print(f"[POST ERROR] {response.status_code}: {response.text}")
         return response
     except Exception as e:
         print(f"[POST ERROR] {e}")
@@ -68,7 +76,7 @@ def safe_lichess_post(url, json_data=None):
 
 
 def safe_lichess_stream(url, game_id=""):
-    backoff = 60
+    backoff = 5
     while True:
         try:
             response = requests.get(url, headers=HEADERS, stream=True, timeout=None)
@@ -82,8 +90,8 @@ def safe_lichess_stream(url, game_id=""):
                 print(f"[{game_id}] Stream failed ({response.status_code}). Retrying in 10s...")
                 time.sleep(10)
         except Exception as e:
-            print(f"[{game_id}] Stream exception: {e}. Retrying in 10s...")
-            time.sleep(10)
+            print(f"[{game_id}] Stream exception: {e}. Retrying in 5s...")
+            time.sleep(5)
 
 # --- GAME ACTIONS ---
 def send_chat_message(game_id, room, text):
@@ -207,6 +215,9 @@ def play_game(game_id, variant_key):
                     bot_color = 'black'
                 else:
                     print(f"[{game_id}] ERROR: Bot not found in game! White: {white_id}, Black: {black_id}")
+                    # If bot not in game, ensure we remove from active_games so it can be retried later
+                    with active_games_lock:
+                        active_games.discard(game_id)
                     continue
 
                 print(f"[GAME INFO] Bot plays as {bot_color}")
@@ -225,6 +236,10 @@ def play_game(game_id, variant_key):
                     engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
             elif event_type == 'gameState':
+                # If we haven't determined bot_color yet, skip gameState updates
+                if bot_color is None:
+                    continue
+
                 moves_str = event.get('moves', '')
                 moves_played = moves_str.split() if moves_str else []
                 is_bot_turn = (
@@ -321,7 +336,13 @@ def listen_to_events():
                 elif event_type == 'gameStart':
                     game_id = event['game']['id']
                     variant_key = event['game']['variant']['key']
-                    threading.Thread(target=play_game, args=(game_id, variant_key)).start()
+                    with active_games_lock:
+                        if game_id in active_games:
+                            print(f"[{game_id}] Already handling game, skipping duplicate gameStart")
+                            continue
+                        active_games.add(game_id)
+                    t = threading.Thread(target=play_game, args=(game_id, variant_key), daemon=True)
+                    t.start()
 
         except Exception as conn_err:
             print(f"[SERVER CRITICAL] {conn_err}. Reconnecting in 10s...")
