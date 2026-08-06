@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 # --- CONFIGURATION ---
 TOKEN = os.environ.get("LICHESS_TOKEN", "YOUR_SECRET_TOKEN_HERE")
 BOT_USERNAME = "AATK_VanguardX"
+BOT_USERNAME_LC = BOT_USERNAME.lower()
 
 HEADERS = {
     "Authorization": f"Bearer {TOKEN}",
@@ -46,6 +47,7 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
+
 def run_fake_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
@@ -63,6 +65,7 @@ def safe_lichess_post(url, json_data=None):
     except Exception as e:
         print(f"[POST ERROR] {e}")
         return None
+
 
 def safe_lichess_stream(url, game_id=""):
     backoff = 60
@@ -92,6 +95,7 @@ def send_chat_message(game_id, room, text):
     else:
         print(f"[{game_id}] Failed to send chat: {response.status_code if response else 'No response'}")
 
+
 def make_lichess_move(game_id, move_str):
     url = f"https://lichess.org/api/bot/game/{game_id}/move/{move_str}"
     response = safe_lichess_post(url)
@@ -113,6 +117,7 @@ def find_engine_binary(engine_name):
         if os.path.exists(path):
             return path
     return None
+
 
 def stockfish_worker():
     print("[ENGINE] Initializing...")
@@ -165,6 +170,7 @@ def stockfish_worker():
         finally:
             engine_queue.task_done()
 
+
 def play_game(game_id, variant_key):
     try:
         print(f"[GAME START] {game_id} | Variant: {variant_key}")
@@ -173,7 +179,7 @@ def play_game(game_id, variant_key):
         opening_move_played = False
 
         game_url = f"https://lichess.org/api/bot/game/stream/{game_id}"
-        response = requests.get(game_url, headers=HEADERS, stream=True, timeout=None)
+        response = safe_lichess_stream(game_url, game_id)
 
         for line in response.iter_lines():
             if not line:
@@ -190,30 +196,32 @@ def play_game(game_id, variant_key):
                 state = event.get('state', {})
                 moves_str = state.get('moves', '')
                 moves_played = moves_str.split() if moves_str else []
-                
+
                 # Determine bot color - check both white and black
-                white_id = event.get('white', {}).get('id')
-                black_id = event.get('black', {}).get('id')
-                
-                if white_id == BOT_USERNAME:
+                white_id = (event.get('white') or {}).get('id', '') or ''
+                black_id = (event.get('black') or {}).get('id', '') or ''
+
+                if white_id and white_id.lower() == BOT_USERNAME_LC:
                     bot_color = 'white'
-                elif black_id == BOT_USERNAME:
+                elif black_id and black_id.lower() == BOT_USERNAME_LC:
                     bot_color = 'black'
                 else:
                     print(f"[{game_id}] ERROR: Bot not found in game! White: {white_id}, Black: {black_id}")
                     continue
-                
+
                 print(f"[GAME INFO] Bot plays as {bot_color}")
 
                 # Send opening greeting
                 send_chat_message(game_id, 'player', 'Hello! Good luck!')
 
-                if bot_color == 'white' and len(moves_played) == 0:
+                if bot_color == 'white' and len(moves_played) == 0 and not opening_move_played:
                     print(f"[{game_id}] Bot is White — making opening move...")
                     opening_move_played = True
+
                     def handle_move_result(move_uci):
                         if move_uci:
                             make_lichess_move(game_id, move_uci)
+
                     engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
             elif event_type == 'gameState':
@@ -226,9 +234,11 @@ def play_game(game_id, variant_key):
 
                 if is_bot_turn:
                     print(f"[{game_id}] Bot turn detected ({bot_color}), moves so far: {len(moves_played)}")
+
                     def handle_move_result(move_uci):
                         if move_uci:
                             make_lichess_move(game_id, move_uci)
+
                     engine_queue.put((game_id, moves_played, handle_move_result, variant_key))
 
     except Exception as conn_err:
@@ -240,29 +250,36 @@ def play_game(game_id, variant_key):
             active_games.discard(game_id)
         print(f"[GAME END] {game_id}")
 
+
 def handle_challenge(event):
     try:
         challenge = event.get('challenge', {})
         challenge_id = challenge.get('id')
         challenger = challenge.get('challenger', {})
-        challenger_name = challenger.get('name', 'Unknown')
+        challenger_id = challenger.get('id', '')
+        challenger_name = challenger.get('name', challenger_id or 'Unknown')
         challenger_is_bot = challenger.get('bot', False)
-        challenger_id = challenger.get('id')
         variant = challenge.get('variant', {}).get('key', 'unknown')
         speed = challenge.get('timeControl', {}).get('type', 'unknown')
         rated = challenge.get('rated', False)
 
-        print(f"[CHALLENGE] Received from {challenger_name} ({variant}, {speed}, {'rated' if rated else 'casual'})")
+        # Fallback heuristic if 'bot' flag is missing/unreliable
+        heuristic_bot = False
+        if not challenger_is_bot and challenger_id:
+            heuristic_bot = 'bot' in challenger_id.lower()
+            challenger_is_bot = challenger_is_bot or heuristic_bot
 
-        # Only decline challenges from confirmed bots (using the 'bot' flag)
+        print(f"[CHALLENGE] Received from {challenger_name} id={challenger_id} (bot_flag={challenger.get('bot', None)} heuristic={heuristic_bot}) ({variant}, {speed}, {'rated' if rated else 'casual'})")
+
+        # Decline challenges from known/heuristic bots
         if challenger_is_bot:
-            print(f"[CHALLENGE] Declining challenge from bot: {challenger_name}")
+            print(f"[CHALLENGE] Declining challenge from bot: {challenger_name} ({challenger_id})")
             url = f"https://lichess.org/api/challenge/{challenge_id}/decline"
             safe_lichess_post(url)
             return
 
         # Accept all challenges from humans
-        print(f"[CHALLENGE] Accepting challenge from {challenger_name}")
+        print(f"[CHALLENGE] Accepting challenge from {challenger_name} ({challenger_id})")
         url = f"https://lichess.org/api/challenge/{challenge_id}/accept"
         response = safe_lichess_post(url)
         if response and response.status_code == 200:
@@ -281,7 +298,7 @@ def listen_to_events():
 
     while True:
         try:
-            response = requests.get(url, headers=HEADERS, stream=True, timeout=None)
+            response = safe_lichess_stream(url, "events")
             print("[SERVER] Connected to Lichess event stream.")
 
             for line in response.iter_lines():
