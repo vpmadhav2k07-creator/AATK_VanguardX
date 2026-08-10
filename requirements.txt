@@ -1,5 +1,5 @@
 # Core dependencies
-chess==1.10.0
+chess==1.11.2
 requests==2.31.0
 
 # Server dependencies (for health check endpoint)
