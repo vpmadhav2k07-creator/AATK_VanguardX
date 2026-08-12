@@ -177,7 +177,7 @@ def stockfish_worker():
     if fairy_stockfish_path:
         try:
             fairy_engine = chess.engine.SimpleEngine.popen_uci(fairy_stockfish_path)
-            fairy_engine.configure({"Skill Level": 20, "Hash": 64, "Threads": 1})
+            fairy_engine.configure({"Skill Level": 20, "Hash": 1028, "Threads": 4})
             dbg_print("[ENGINE] Fairy Stockfish started")
         except Exception as e:
             dbg_print(f"[WARNING] Failed to start Fairy Stockfish: {e}")
