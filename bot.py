@@ -166,7 +166,7 @@ def stockfish_worker():
     fairy_stockfish_path = find_engine_binary("fairy-stockfish")
     try:
         normal_engine = chess.engine.SimpleEngine.popen_uci(stockfish_path)
-        normal_engine.configure({"Skill Level": 20, "Hash": 64, "Threads": 1})
+        normal_engine.configure({"Skill Level": 20, "Hash": 1024, "Threads": 4})
         dbg_print("[ENGINE] Stockfish started")
     except Exception as e:
         dbg_print(f"[CRITICAL] Failed to start Stockfish: {e}")
